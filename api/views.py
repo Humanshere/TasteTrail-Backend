@@ -289,8 +289,22 @@ class RequestPasswordResetView(APIView):
                 
                 logger.info(f"Password reset requested for: {email}")
                 
-                # In production, send email here
-                # send_password_reset_email(email, token)
+                # Send password reset email
+                from .email_utils import EmailService
+                
+                # Get username for the email
+                username = user['username'] if user else email.split('@')[0]
+                
+                # Send the email with reset token
+                email_sent = EmailService.send_password_reset_email(
+                    to_email=email,
+                    username=username,
+                    reset_token=token
+                )
+                
+                if not email_sent:
+                    logger.error(f"Failed to send password reset email to: {email}")
+                    # We still return success to avoid leaking user information
                 
                 # For development, include token in response
                 return Response(
