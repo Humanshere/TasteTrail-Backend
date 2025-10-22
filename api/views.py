@@ -242,6 +242,7 @@ class RequestPasswordResetView(APIView):
     }
     """
     
+    permission_classes = [AllowAny]
     def post(self, request):
         """Generate and send password reset token."""
         try:
@@ -344,6 +345,7 @@ class ConfirmPasswordResetView(APIView):
     }
     """
     
+    permission_classes = [AllowAny]
     def post(self, request):
         """Confirm password reset with token and set new password."""
         try:
@@ -370,8 +372,16 @@ class ConfirmPasswordResetView(APIView):
             # Find reset token
             reset_request = password_resets_collection.find_one({
                 'token': token,
-                'used': False
+                'used': {"$in": [False, 0]}
             })
+
+            # Print token
+            print(f"Token being searched: '{token}'")
+
+            # Find any matching token regardless of 'used'
+            reset_request_any = password_resets_collection.find_one({'token': token})
+            print(reset_request_any)
+
             
             if not reset_request:
                 return Response(

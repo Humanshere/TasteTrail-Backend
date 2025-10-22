@@ -34,7 +34,7 @@ class EmailService:
     """Service for sending emails from the application."""
     
     @classmethod
-    def send_email(cls, to_email, subject, html_content, text_content=None):
+    def send_email(cls, to_email, subject, text_content=None):
         """
         Send an email with both HTML and plain text versions.
         
@@ -47,9 +47,7 @@ class EmailService:
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
-        if not text_content:
             # Simple conversion from HTML to plain text
-            text_content = html_content.replace('<br>', '\n').replace('</p>', '\n\n')
             
         # Create message container
         msg = MIMEMultipart('alternative')
@@ -59,9 +57,7 @@ class EmailService:
         
         # Attach parts
         part1 = MIMEText(text_content, 'plain')
-        part2 = MIMEText(html_content, 'html')
         msg.attach(part1)
-        msg.attach(part2)
         
         try:
             # Connect to SMTP server
@@ -109,33 +105,9 @@ class EmailService:
         expiry_time = datetime.now() + timedelta(hours=RESET_LINK_EXPIRY_HOURS)
         expiry_str = expiry_time.strftime("%Y-%m-%d %H:%M:%S")
         
-        # Create reset link
-        reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
         
         # Create email content
         subject = "TasteTrail - Password Reset Request"
-        
-        html_content = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #e63946;">TasteTrail Password Reset</h2>
-                <p>Hello {username},</p>
-                <p>We received a request to reset your password for your TasteTrail account.</p>
-                <p>To reset your password, please click the button below:</p>
-                <p style="text-align: center;">
-                    <a href="{reset_link}" style="background-color: #e63946; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
-                </p>
-                <p>Or copy and paste this link into your browser:</p>
-                <p>{reset_link}</p>
-                <p>This link will expire on {expiry_str}.</p>
-                <p>If you didn't request a password reset, you can safely ignore this email.</p>
-                <p>Thank you,<br>The TasteTrail Team</p>
-            </div>
-        </body>
-        </html>
-        """
-        
         text_content = f"""
         TasteTrail Password Reset
         
@@ -143,8 +115,8 @@ class EmailService:
         
         We received a request to reset your password for your TasteTrail account.
         
-        To reset your password, please visit this link:
-        {reset_link}
+        To reset your password, please use this token:
+        {reset_token}
         
         This link will expire on {expiry_str}.
         
@@ -154,4 +126,4 @@ class EmailService:
         The TasteTrail Team
         """
         
-        return cls.send_email(to_email, subject, html_content, text_content)
+        return cls.send_email(to_email, subject,  text_content)
