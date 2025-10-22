@@ -110,6 +110,25 @@ class MongoDBManager:
                 [('used', ASCENDING)], 
                 name='used_idx'
             )
+
+            # Email verifications collection indexes
+            self._db.email_verifications.create_index(
+                [('token', ASCENDING)],
+                unique=True,
+                name='email_verify_token_unique_idx'
+            )
+            self._db.email_verifications.create_index(
+                [('expires_at', ASCENDING)],
+                name='email_verify_expires_at_idx'
+            )
+            self._db.email_verifications.create_index(
+                [('email', ASCENDING)],
+                name='email_verify_email_idx'
+            )
+            self._db.email_verifications.create_index(
+                [('used', ASCENDING)],
+                name='email_verify_used_idx'
+            )
             
             logger.info("✅ Database indexes created successfully")
             
@@ -126,6 +145,11 @@ class MongoDBManager:
         """Get password_resets collection."""
         return self._db.password_resets
 
+    @property
+    def email_verifications(self):
+        """Get email_verifications collection."""
+        return self._db.email_verifications
+
 
 # Initialize global database manager
 db_manager = MongoDBManager()
@@ -133,3 +157,4 @@ db_manager = MongoDBManager()
 # Export collections for easy import
 users_collection = db_manager.users
 password_resets_collection = db_manager.password_resets
+email_verifications_collection = db_manager.email_verifications

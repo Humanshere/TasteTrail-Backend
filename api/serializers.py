@@ -30,7 +30,8 @@ class UserSerializer:
             'email': user_doc['email'],
             'username': user_doc['username'],
             'role': user_doc['role'],
-            'is_active': user_doc.get('is_active', True)
+            'is_active': user_doc.get('is_active', True),
+            'is_verified': user_doc.get('is_verified', False)
         }
         
         if include_timestamps:

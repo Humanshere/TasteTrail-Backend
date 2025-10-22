@@ -27,6 +27,7 @@ SMTP_USERNAME = os.getenv('SMTP_USERNAME', '')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
 EMAIL_FROM = os.getenv('EMAIL_FROM', 'noreply@tastetrail.com')
 RESET_LINK_EXPIRY_HOURS = int(os.getenv('RESET_LINK_EXPIRY_HOURS', 24))
+EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES = int(os.getenv('EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES', 30))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 
@@ -47,8 +48,7 @@ class EmailService:
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
-            # Simple conversion from HTML to plain text
-            
+
         # Create message container
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
@@ -127,3 +127,30 @@ class EmailService:
         """
         
         return cls.send_email(to_email, subject,  text_content)
+
+    @classmethod
+    def send_email_verification(cls, to_email, username, verification_code):
+        """
+        Send an email verification code during registration.
+        """
+        expiry_time = datetime.now() + timedelta(minutes=EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES)
+        expiry_str = expiry_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        subject = "TasteTrail - Verify your email"
+        text_content = f"""
+        TasteTrail Email Verification
+
+        Hello {username or to_email.split('@')[0]},
+
+        Thanks for signing up! Please verify your email using this code:
+        {verification_code}
+
+        This code expires on {expiry_str}.
+
+        If you didn't create an account, you can safely ignore this email.
+
+        Thank you,
+        The TasteTrail Team
+        """
+
+        return cls.send_email(to_email, subject, text_content)

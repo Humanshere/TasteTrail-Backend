@@ -71,6 +71,14 @@ class TokenGenerator:
             Secure random token
         """
         return secrets.token_urlsafe(length)
+
+    @staticmethod
+    def generate_numeric_code(digits: int = 6) -> str:
+        """Generate a numeric verification code with given number of digits."""
+        # Use secrets for cryptographically strong randomness
+        upper = 10 ** digits
+        num = secrets.randbelow(upper)
+        return str(num).zfill(digits)
     
     @staticmethod
     def generate_jwt_tokens(user_data: Dict[str, Any]) -> Dict[str, str]:
@@ -124,6 +132,12 @@ class DateTimeHelper:
             os.getenv('PASSWORD_RESET_TOKEN_EXPIRY_MINUTES', 15)
         )
         return datetime.utcnow() + timedelta(minutes=expiry_minutes)
+
+    @staticmethod
+    def get_email_verification_expiry() -> datetime:
+        """Get expiration datetime for email verification token/code."""
+        minutes = int(os.getenv('EMAIL_VERIFICATION_TOKEN_EXPIRY_MINUTES', 30))
+        return datetime.utcnow() + timedelta(minutes=minutes)
     
     @staticmethod
     def is_expired(expiry_datetime: datetime) -> bool:

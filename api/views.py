@@ -14,7 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 from pymongo.errors import DuplicateKeyError
 from bson import ObjectId
 
-from .mongo_db import users_collection, password_resets_collection
+from .mongo_db import users_collection, password_resets_collection, email_verifications_collection
 from .validators import (
     EmailValidator, PasswordValidator, 
     UsernameValidator, RoleValidator
@@ -92,6 +92,7 @@ class RegisterView(APIView):
                 'password': hashed_password,
                 'role': role or 'user',
                 'is_active': True,
+                'is_verified': False,
                 'created_at': DateTimeHelper.get_utc_now(),
                 'updated_at': DateTimeHelper.get_utc_now(),
                 'last_login': None
@@ -101,15 +102,38 @@ class RegisterView(APIView):
             result = users_collection.insert_one(user_doc)
             user_doc['_id'] = result.inserted_id
             
+            # Generate and store verification code
+            verification_code = TokenGenerator.generate_numeric_code(6)
+            email_verifications_collection.delete_many({'email': email})
+            email_verifications_collection.insert_one({
+                'email': email,
+                'token': verification_code,
+                'created_at': DateTimeHelper.get_utc_now(),
+                'expires_at': DateTimeHelper.get_email_verification_expiry(),
+                'used': False
+            })
+
+            # Send verification email (best-effort)
+            try:
+                from .email_utils import EmailService
+                EmailService.send_email_verification(
+                    to_email=email,
+                    username=username,
+                    verification_code=verification_code
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send verification email to {email}: {e}")
+
             # Serialize and return user data
             user_data = UserSerializer.serialize_user(user_doc)
             
-            logger.info(f"New user registered: {email}")
+            logger.info(f"New user registered: {email}. Verification code sent.")
             
+            # For development convenience, include code in response (remove in prod)
             return Response(
                 ResponseHelper.success_response(
-                    'User registered successfully',
-                    {'user': user_data}
+                    'User registered successfully. Please verify your email.',
+                    {'user': user_data, 'verification_code': verification_code}
                 ),
                 status=status.HTTP_201_CREATED
             )
@@ -174,6 +198,14 @@ class LoginView(APIView):
                 return Response(
                     ResponseHelper.error_response(
                         'Account is deactivated. Please contact support'
+                    ),
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            # Require email verification
+            if not user.get('is_verified', False):
+                return Response(
+                    ResponseHelper.error_response(
+                        'Email not verified. Please check your inbox.'
                     ),
                     status=status.HTTP_403_FORBIDDEN
                 )
@@ -442,6 +474,148 @@ class ConfirmPasswordResetView(APIView):
                 ResponseHelper.error_response(
                     'An error occurred resetting your password'
                 ),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class VerifyEmailView(APIView):
+    """
+    Verify Email Endpoint
+
+    POST /api/verify-email/
+    Body: {
+        "email": "user@example.com",
+        "code": "123456"
+    }
+    """
+    permission_classes = [AllowAny]
+    def post(self, request):
+        try:
+            email = request.data.get('email', '').strip().lower()
+            code = request.data.get('code', '').strip()
+
+            if not email or not code:
+                return Response(
+                    ResponseHelper.error_response('Email and code are required'),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Find latest unused verification for this email
+            record = email_verifications_collection.find_one({
+                'email': email,
+                'token': code,
+                'used': {"$in": [False, 0]}
+            })
+            if not record:
+                return Response(
+                    ResponseHelper.error_response('Invalid or already used code'),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check expiry
+            if DateTimeHelper.is_expired(record['expires_at']):
+                email_verifications_collection.delete_one({'_id': record['_id']})
+                return Response(
+                    ResponseHelper.error_response('Code has expired. Please request a new one'),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Mark verified on user
+            update_res = users_collection.update_one(
+                {'email': email},
+                {'$set': {'is_verified': True, 'updated_at': DateTimeHelper.get_utc_now()}}
+            )
+            if update_res.matched_count == 0:
+                return Response(
+                    ResponseHelper.error_response('User not found'),
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Mark token used and delete others
+            email_verifications_collection.update_one({'_id': record['_id']}, {'$set': {'used': True}})
+            email_verifications_collection.delete_many({'email': email, 'used': {"$in": [False, 0]}, '_id': {"$ne": record['_id']}})
+
+            return Response(
+                ResponseHelper.success_response('Email verified successfully'),
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            logger.error(f"Email verification error: {e}", exc_info=True)
+            return Response(
+                ResponseHelper.error_response('An error occurred verifying your email'),
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ResendVerificationView(APIView):
+    """
+    Resend Email Verification Code
+
+    POST /api/verify-email/resend/
+    Body: { "email": "user@example.com" }
+    """
+    permission_classes = [AllowAny]
+    def post(self, request):
+        try:
+            email = request.data.get('email', '').strip().lower()
+            if not email:
+                return Response(
+                    ResponseHelper.error_response('Email is required'),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Validate email format (generic response to avoid enumeration)
+            is_valid, _ = EmailValidator.validate(email)
+            if not is_valid:
+                return Response(
+                    ResponseHelper.error_response('Invalid email format'),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            user = users_collection.find_one({'email': email})
+            if not user:
+                # Return success but no info leak
+                return Response(
+                    ResponseHelper.success_response('If the email exists, a new code was sent'),
+                    status=status.HTTP_200_OK
+                )
+            if user.get('is_verified', False):
+                return Response(
+                    ResponseHelper.success_response('Email already verified'),
+                    status=status.HTTP_200_OK
+                )
+
+            # Create new code and send
+            verification_code = TokenGenerator.generate_numeric_code(6)
+            email_verifications_collection.delete_many({'email': email})
+            email_verifications_collection.insert_one({
+                'email': email,
+                'token': verification_code,
+                'created_at': DateTimeHelper.get_utc_now(),
+                'expires_at': DateTimeHelper.get_email_verification_expiry(),
+                'used': False
+            })
+            try:
+                from .email_utils import EmailService
+                EmailService.send_email_verification(
+                    to_email=email,
+                    username=user.get('username', ''),
+                    verification_code=verification_code
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send verification email to {email}: {e}")
+
+            return Response(
+                ResponseHelper.success_response(
+                    'Verification code sent',
+                    {'verification_code': verification_code}  # remove in prod
+                ),
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            logger.error(f"Resend verification error: {e}", exc_info=True)
+            return Response(
+                ResponseHelper.error_response('An error occurred resending verification'),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
