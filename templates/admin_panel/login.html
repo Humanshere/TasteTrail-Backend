@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Login</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+  <main class="container">
+    <article>
+      <h2>Admin Login</h2>
+      {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+        <article class="{{ message.tags }}">{{ message }}</article>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <label>
+          Admin Secret
+          <input type="password" name="secret" placeholder="Enter admin secret" required />
+        </label>
+        <button type="submit">Login</button>
+      </form>
+    </article>
+  </main>
+</body>
+</html>

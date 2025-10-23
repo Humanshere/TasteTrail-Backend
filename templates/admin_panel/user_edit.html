@@ -1,0 +1,48 @@
+{% extends 'admin_panel/base.html' %}
+{% block title %}Edit User - Admin Panel{% endblock %}
+{% block content %}
+  <article>
+    <h3>Edit User</h3>
+    <p><strong>Email:</strong> {{ user.email }}</p>
+
+    <form method="post">
+      {% csrf_token %}
+      <label>
+        Username
+        <input type="text" name="username" value="{{ user.username }}" required />
+      </label>
+
+      <label>
+        Role
+        <select name="role">
+          <option value="user" {% if user.role == 'user' %}selected{% endif %}>user</option>
+          <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>admin</option>
+        </select>
+      </label>
+
+      <fieldset>
+        <label>
+          <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %} />
+          Active
+        </label>
+        <label>
+          <input type="checkbox" name="is_verified" {% if user.is_verified %}checked{% endif %} />
+          Verified
+        </label>
+      </fieldset>
+
+      <details>
+        <summary>Change Password</summary>
+        <label>
+          New Password (leave blank to keep unchanged)
+          <input type="password" name="new_password" />
+        </label>
+      </details>
+
+      <footer style="margin-top:1rem">
+        <a href="{% url 'admin_users_list' %}" class="secondary" role="button">Back</a>
+        <button type="submit">Save Changes</button>
+      </footer>
+    </form>
+  </article>
+{% endblock %}

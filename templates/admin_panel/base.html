@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Admin Panel{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    main { max-width: 960px; margin: 2rem auto; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; }
+    .messages { margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="topbar">
+      <h2>Admin Panel</h2>
+      <nav>
+        <a href="{% url 'admin_users_list' %}">Users</a>
+        <form method="post" action="{% url 'admin_logout' %}" style="display:inline">
+          {% csrf_token %}
+          <button type="submit" class="contrast" style="margin-left:0.5rem">Logout</button>
+        </form>
+      </nav>
+    </div>
+
+    {% if messages %}
+    <div class="messages">
+      {% for message in messages %}
+      <article class="{{ message.tags }}">{{ message }}</article>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
